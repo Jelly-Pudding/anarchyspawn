@@ -7,12 +7,14 @@ max-spawn-attempts: 75
 # Cooldown in seconds for using the /spawn command
 spawn-cooldown: 5
 
-# List of blocks that are considered unsafe to spawn on or next to
+# List of blocks that are considered unsafe to spawn on.
+# This list is used as the default if the `unsafe-blocks` section in the config is empty.
 unsafe-blocks:
   - LAVA
-  - WATER
-  - CACTUS
   - FIRE
+  - CAMPFIRE
+  - SOUL_CAMPFIRE
   - MAGMA_BLOCK
-  - SWEET_BERRY_BUSH
+  - CACTUS
   - POWDER_SNOW
+  - SWEET_BERRY_BUSH

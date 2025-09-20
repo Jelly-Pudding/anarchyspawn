@@ -56,8 +56,14 @@ public final class AnarchySpawn extends JavaPlugin implements Listener {
         }
         // add a few sensible defaults if none provided
         if (mats.isEmpty()) {
+            mats.add(Material.LAVA);
+            mats.add(Material.FIRE);
+            mats.add(Material.CAMPFIRE);
+            mats.add(Material.SOUL_CAMPFIRE);
             mats.add(Material.MAGMA_BLOCK);
             mats.add(Material.CACTUS);
+            mats.add(Material.POWDER_SNOW);
+            mats.add(Material.SWEET_BERRY_BUSH);
         }
         this.unsafeBlocks = Collections.unmodifiableSet(mats);
     }
@@ -145,7 +151,7 @@ public final class AnarchySpawn extends JavaPlugin implements Listener {
                 while (yScan > world.getMinHeight()) {
                     Block ground = world.getBlockAt(x, yScan, z);
                     Material gm = ground.getType();
-                    if (gm.isSolid() && !unsafeBlocks.contains(gm) && !isHazard(gm)) {
+                    if (gm.isSolid() && !unsafeBlocks.contains(gm)) {
                         Block feet = world.getBlockAt(x, yScan + 1, z);
                         Block head = world.getBlockAt(x, yScan + 2, z);
                         if (isAiry(feet) && isAiry(head)) {
@@ -178,13 +184,6 @@ public final class AnarchySpawn extends JavaPlugin implements Listener {
             Bukkit.getGlobalRegionScheduler().execute(this, () -> tryAttempt(p, world, attempt, callback));
             return null;
         });
-    }
-
-    private boolean isHazard(Material m) {
-        switch (m) {
-            case LAVA, FIRE, CAMPFIRE, SOUL_CAMPFIRE, MAGMA_BLOCK, CACTUS, POWDER_SNOW -> { return true; }
-            default -> { return false; }
-        }
     }
 
     private boolean isAiry(Block b) {
