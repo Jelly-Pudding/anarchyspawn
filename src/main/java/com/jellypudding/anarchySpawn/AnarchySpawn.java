@@ -1,5 +1,7 @@
+
 package com.jellypudding.anarchySpawn;
 
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
@@ -13,212 +15,188 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class AnarchySpawn extends JavaPlugin implements Listener {
+
     private int spawnRadius;
-    private int maxAttempts;
+    private int maxSpawnAttempts;
     private int spawnCooldown;
-    private final Random random = new Random();
-    private final Set<Material> unsafeBlocks = new HashSet<>();
+    private Set<Material> unsafeBlocks;
     private final Map<UUID, Long> spawnCooldowns = new HashMap<>();
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
-        loadConfigValues();
-
-        getServer().getPluginManager().registerEvents(this, this);
-        Objects.requireNonNull(getCommand("spawn")).setTabCompleter(this);
-        Objects.requireNonNull(getCommand("anarchyspawn")).setTabCompleter(this);
-
-        getLogger().info("AnarchySpawn has been enabled.");
+        reloadLocalConfig();
+        Bukkit.getPluginManager().registerEvents(this, this);
+        getLogger().info("AnarchySpawn (Folia) enabled");
     }
 
     @Override
     public void onDisable() {
-        getLogger().info("AnarchySpawn has been disabled.");
+        spawnCooldowns.clear();
     }
 
-    private void loadConfigValues() {
-        FileConfiguration config = getConfig();
-        spawnRadius = config.getInt("spawn-radius", 300);
-        maxAttempts = config.getInt("max-spawn-attempts", 75);
-        spawnCooldown = config.getInt("spawn-cooldown", 5);
+    private void reloadLocalConfig() {
+        FileConfiguration cfg = getConfig();
+        this.spawnRadius = Math.max(16, cfg.getInt("spawn-radius", 300));
+        this.maxSpawnAttempts = Math.max(1, cfg.getInt("max-spawn-attempts", 75));
+        this.spawnCooldown = Math.max(0, cfg.getInt("spawn-cooldown", 5));
 
-        unsafeBlocks.clear();
-        List<String> unsafeBlocksList = config.getStringList("unsafe-blocks");
-        for (String blockName : unsafeBlocksList) {
+        List<String> list = cfg.getStringList("unsafe-blocks");
+        Set<Material> mats = new HashSet<>();
+        for (String s : list) {
             try {
-                Material material = Material.valueOf(blockName.toUpperCase());
-                unsafeBlocks.add(material);
-            } catch (IllegalArgumentException e) {
-                getLogger().warning("Invalid material name in config: " + blockName);
-            }
+                mats.add(Material.valueOf(s.toUpperCase(Locale.ROOT)));
+            } catch (IllegalArgumentException ignored) {}
+        }
+        // add a few sensible defaults if none provided
+        if (mats.isEmpty()) {
+            mats.add(Material.LAVA);
+            mats.add(Material.FIRE);
+            mats.add(Material.CAMPFIRE);
+            mats.add(Material.SOUL_CAMPFIRE);
+            mats.add(Material.MAGMA_BLOCK);
+            mats.add(Material.CACTUS);
+            mats.add(Material.POWDER_SNOW);
+            mats.add(Material.SWEET_BERRY_BUSH);
+        }
+        this.unsafeBlocks = Collections.unmodifiableSet(mats);
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        Player p = e.getPlayer();
+        if (!p.hasPlayedBefore()) {
+            teleportToRandomSafe(p, result -> {
+                if (!result) p.sendMessage("не вдалося знайти безпечний спавн :(");
+            });
         }
     }
 
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent e) {
+        if (e.isBedSpawn() || e.isAnchorSpawn()) return;
+        Player p = e.getPlayer();
+        p.getScheduler().execute(this, () -> teleportToRandomSafe(p, ok -> {}), null, 1L);
+    }
+
     @Override
-    public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String @NotNull [] args) {
-        if (command.getName().equalsIgnoreCase("spawn")) {
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage("This command can only be used by players!");
+    public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+        String name = cmd.getName().toLowerCase(Locale.ROOT);
+        if (name.equals("anarchyspawn")) {
+            if (!(sender.hasPermission("anarchyspawn.reload"))) {
+                sender.sendMessage("у вас немає прав");
                 return true;
             }
-
-            World.Environment playerEnv = player.getWorld().getEnvironment();
-            if (playerEnv == World.Environment.NETHER || playerEnv == World.Environment.THE_END) {
-                player.sendMessage("§cYou cannot use /spawn in the " + 
-                    (playerEnv == World.Environment.NETHER ? "Nether" : "End") + ".");
-                return true;
-            }
-
-            // Check for cooldown.
-            UUID playerId = player.getUniqueId();
-            long currentTime = System.currentTimeMillis();
-
-            // Clean up expired cooldowns to prevent memory leak.
-            cleanupExpiredCooldowns(currentTime);
-
-            if (spawnCooldowns.containsKey(playerId)) {
-                long lastUsed = spawnCooldowns.get(playerId);
-                long timeDiff = (currentTime - lastUsed) / 1000;
-                if (timeDiff < spawnCooldown) {
-                    long remainingTime = spawnCooldown - timeDiff;
-                    player.sendMessage("§cYou must wait " + remainingTime + " more second" +
-                        (remainingTime == 1 ? "" : "s") + " before using /spawn again.");
-                    return true;
-                }
-            }
-
-            Location spawnLocation = findSafeSpawnLocation(player.getWorld());
-            player.teleport(spawnLocation);
-            player.sendMessage("Teleported to a random spawn location!");
-
-            spawnCooldowns.put(playerId, currentTime);
+            reloadConfig();
+            reloadLocalConfig();
+            sender.sendMessage("конфіг перезавантажено");
             return true;
-        } else if (command.getName().equalsIgnoreCase("anarchyspawn")) {
-            if (args.length == 0) {
-                sender.sendMessage("Usage: /anarchyspawn reload");
+        }
+        if (name.equals("spawn")) {
+            if (!(sender instanceof Player p)) {
+                sender.sendMessage("тільки для гравців");
                 return true;
             }
-
-            if (args[0].equalsIgnoreCase("reload")) {
-                if (!sender.hasPermission("anarchyspawn.reload")) {
-                    sender.sendMessage("You don't have permission to use this command!");
-                    return true;
-                }
-                reloadConfig();
-                loadConfigValues();
-                sender.sendMessage("AnarchySpawn configuration reloaded.");
+            if (!p.hasPermission("anarchyspawn.spawn")) {
+                p.sendMessage("у вас немає прав");
                 return true;
             }
-            return false;
+            long now = System.currentTimeMillis();
+            cleanupExpiredCooldowns(now);
+            Long last = spawnCooldowns.get(p.getUniqueId());
+            if (last != null && now - last < (spawnCooldown * 1000L)) {
+                long leftSec = Math.max(0L, (spawnCooldown * 1000L - (now - last)) / 1000L);
+                p.sendMessage("зачекайте " + leftSec + " с");
+                return true;
+            }
+            spawnCooldowns.put(p.getUniqueId(), now);
+            teleportToRandomSafe(p, result -> {
+                if (!result) p.sendMessage("не вдалося знайти безпечний спавн :(");
+            });
+            return true;
         }
         return false;
     }
 
-    @Override
-    public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String @NotNull [] args) {
-        if (command.getName().equalsIgnoreCase("anarchyspawn") && args.length == 1) {
-            List<String> completions = new ArrayList<>();
-            if (sender.hasPermission("anarchyspawn.reload") && "reload".startsWith(args[0].toLowerCase())) {
-                completions.add("reload");
-            }
-            return completions;
-        }
-        return new ArrayList<>();
+    private void teleportToRandomSafe(Player p, java.util.function.Consumer<Boolean> callback) {
+        if (!p.isOnline()) { callback.accept(false); return; }
+        World world = p.getWorld();
+        AtomicInteger attempt = new AtomicInteger(0);
+        tryAttempt(p, world, attempt, callback);
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        if (!player.hasPlayedBefore()) {
-            Location spawnLocation = findSafeSpawnLocation(player.getWorld());
-            player.teleport(spawnLocation);
-        }
+    private void tryAttempt(Player p, World world, AtomicInteger attempt, java.util.function.Consumer<Boolean> callback) {
+        if (!p.isOnline()) { callback.accept(false); return; }
+        if (attempt.incrementAndGet() > maxSpawnAttempts) { callback.accept(false); return; }
+
+        int x = ThreadLocalRandom.current().nextInt(-spawnRadius, spawnRadius + 1);
+        int z = ThreadLocalRandom.current().nextInt(-spawnRadius, spawnRadius + 1);
+        final int cx = x >> 4;
+        final int cz = z >> 4;
+
+        world.getChunkAtAsyncUrgently(cx, cz).thenAccept(chunk -> {
+            Bukkit.getRegionScheduler().execute(this, world, cx, cz, () -> {
+                int yTop = world.getHighestBlockYAt(x, z);
+                int yScan = Math.min(yTop, world.getMaxHeight() - 2);
+
+                boolean found = false;
+                int safeY = 0;
+
+                while (yScan > world.getMinHeight()) {
+                    Block ground = world.getBlockAt(x, yScan, z);
+                    Material gm = ground.getType();
+                    if (gm.isSolid() && !unsafeBlocks.contains(gm)) {
+                        Block feet = world.getBlockAt(x, yScan + 1, z);
+                        Block head = world.getBlockAt(x, yScan + 2, z);
+                        if (isAiry(feet) && isAiry(head)) {
+                            found = true;
+                            safeY = yScan + 1;
+                            break;
+                        }
+                    }
+                    yScan--;
+                }
+
+                if (!found) {
+                    Bukkit.getGlobalRegionScheduler().execute(this, () -> tryAttempt(p, world, attempt, callback));
+                    return;
+                }
+
+                Location loc = new Location(world, x + 0.5, safeY, z + 0.5);
+                p.getScheduler().execute(this, () -> {
+                    if (!p.isOnline()) { callback.accept(false); return; }
+                    p.teleportAsync(loc).thenAccept(success -> {
+                        if (!success) {
+                            Bukkit.getGlobalRegionScheduler().execute(this, () -> tryAttempt(p, world, attempt, callback));
+                        } else {
+                            callback.accept(true);
+                        }
+                    });
+                }, null, 0L);
+            });
+        }).exceptionally(ex -> {
+            Bukkit.getGlobalRegionScheduler().execute(this, () -> tryAttempt(p, world, attempt, callback));
+            return null;
+        });
     }
 
-    @EventHandler
-    public void onPlayerRespawn(PlayerRespawnEvent event) {
-        if (!event.isAnchorSpawn() && !event.isBedSpawn()) {
-            World overworld = event.getPlayer().getServer().getWorlds().getFirst();
-            Location spawnLocation = findSafeSpawnLocation(overworld);
-            event.setRespawnLocation(spawnLocation);
+    private boolean isAiry(Block b) {
+        Material m = b.getType();
+        if (m == Material.AIR || b.isPassable()) {
+            if (m == Material.WATER || m == Material.LAVA || m == Material.POWDER_SNOW) return false;
+            return true;
         }
+        return false;
     }
 
-    private Location findSafeSpawnLocation(World world) {
-        Location bestLocation = null;
-        int bestSafetyScore = -1;
-
-        for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            // Generate random coordinates within spawn radius
-            int x = random.nextInt(spawnRadius * 2) - spawnRadius;
-            int z = random.nextInt(spawnRadius * 2) - spawnRadius;
-
-            // Find the highest non-air block at these coordinates
-            int y = world.getHighestBlockYAt(x, z);
-            Location location = new Location(world, x + 0.5, y + 1, z + 0.5);
-
-            int safetyScore = calculateSafetyScore(location);
-
-            // If we found a perfectly safe location, return it immediately
-            if (safetyScore == 100) {
-                return location;
-            }
-
-            // Keep track of the safest location we've found
-            if (safetyScore > bestSafetyScore) {
-                bestSafetyScore = safetyScore;
-                bestLocation = location;
-            }
-        }
-
-        // If we couldn't find a perfectly safe location, return the best one we found
-        // If we didn't find any viable location at all, return a location at build height
-        // which is not ideal but at least gives the player time to think of something.
-        if (bestLocation == null) {
-            int x = random.nextInt(spawnRadius * 2) - spawnRadius;
-            int z = random.nextInt(spawnRadius * 2) - spawnRadius;
-            bestLocation = new Location(world, x + 0.5, world.getMaxHeight() - 2, z + 0.5);
-            getLogger().warning("Falling back to emergency spawn location at build height");
-        }
-
-        return bestLocation;
-    }
-
-    private int calculateSafetyScore(Location location) {
-        Block feet = location.getBlock();
-        Block ground = location.subtract(0, 1, 0).getBlock();
-        Block head = location.add(0, 2, 0).getBlock();
-
-        // Start with a perfect score
-        int score = 100;
-
-        // Check for basic requirements
-        if (!feet.getType().isAir() || !head.getType().isAir()) {
-            return 0; // Completely unsafe - can't spawn inside blocks
-        }
-
-        // Penalize based on ground conditions
-        if (!ground.getType().isSolid()) {
-            score -= 50;
-        }
-        if (ground.isLiquid()) {
-            score -= 30;
-        }
-        if (unsafeBlocks.contains(ground.getType())) {
-            score -= 40;
-        }
-
-        return Math.max(score, 0); // Don't return negative scores
-    }
-
-    private void cleanupExpiredCooldowns(long currentTime) {
-        long expiredThreshold = currentTime - (spawnCooldown * 1000L);
-        spawnCooldowns.entrySet().removeIf(entry -> entry.getValue() < expiredThreshold);
+    private void cleanupExpiredCooldowns(long now) {
+        long threshold = now - (spawnCooldown * 1000L);
+        spawnCooldowns.entrySet().removeIf(e -> e.getValue() < threshold);
     }
 }

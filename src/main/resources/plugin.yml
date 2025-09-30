@@ -2,9 +2,10 @@ name: AnarchySpawn
 version: '1.1.2'
 main: com.jellypudding.anarchySpawn.AnarchySpawn
 api-version: '1.21'
-description: "Handles random spawning of players in anarchy servers"
-author: AlphaAlex115
-website: www.minecraftoffline.net
+folia-supported: true
+description: "Handles random spawning of players in anarchy servers (Folia-safe)"
+author: AlphaAlex115 (Fork:hausemaster2b2tua)
+website: www.minecraftoffline.net (https://discord.gg/8xPw395ZPT)
 commands:
   spawn:
     description: "Teleport to a random spawn location"
