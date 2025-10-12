@@ -43,6 +43,7 @@ public final class AnarchySpawn extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        spawnCooldowns.clear();
         getLogger().info("AnarchySpawn has been disabled.");
     }
 
