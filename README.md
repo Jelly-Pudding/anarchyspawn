@@ -1,5 +1,5 @@
 # AnarchySpawn Plugin
-**AnarchySpawn** is a Minecraft Paper 1.21.8 plugin that handles random spawning of players. When players first join or respawn without a bed/anchor, they will be randomly teleported to a safe location within a configurable radius from world coordinates 0,0.
+**AnarchySpawn** is a Minecraft Paper 1.21.10 plugin that handles random spawning of players. When players first join or respawn without a bed/anchor, they will be randomly teleported to a safe location within a configurable radius from world coordinates 0,0.
 
 ## Features
 - Random spawn locations within configurable radius.

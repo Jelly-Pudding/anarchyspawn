@@ -34,6 +34,10 @@ public final class AnarchySpawn extends JavaPlugin implements Listener {
         Objects.requireNonNull(getCommand("spawn")).setTabCompleter(this);
         Objects.requireNonNull(getCommand("anarchyspawn")).setTabCompleter(this);
 
+        // Initialise bStats
+        int pluginId = 27563;
+        new Metrics(this, pluginId);
+
         getLogger().info("AnarchySpawn has been enabled.");
     }
 
