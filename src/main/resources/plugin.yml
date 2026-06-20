@@ -1,7 +1,7 @@
 name: AnarchySpawn
 version: '${version}'
 main: com.jellypudding.anarchySpawn.AnarchySpawn
-api-version: '26.1.2'
+api-version: '26.2'
 description: "Handles random spawning of players in anarchy servers"
 author: AlphaAlex115
 website: www.minecraftoffline.net

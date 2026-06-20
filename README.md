@@ -1,5 +1,5 @@
 # AnarchySpawn Plugin
-**AnarchySpawn** is a Minecraft Paper 26.1.2 plugin that handles random spawning of players. Although it was custom built for [minecraftoffline.net](https://www.minecraftoffline.net), any server can use it.
+**AnarchySpawn** is a Minecraft Paper 26.2 plugin that handles random spawning of players. Although it was custom built for [minecraftoffline.net](https://www.minecraftoffline.net), any server can use it.
 
 The plugin works by randomly teleporting players to a safe location within a configurable radius from world coordinates 0,0. Only players joining for the first time or respawning without a bed/anchor are affected. Players can also return to spawn with `/spawn`.
 
